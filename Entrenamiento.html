@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FitStreak Pro - Rutina con Temporizador Obligatorio</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Confetti script -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              accent: '#f59e0b',
+              flame: '#f97316',
+              dark: '#090d16',
+              card: '#131b2e',
+              border: '#202d4a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .custom-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes flame-pulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.4)); }
+      50% { transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.8)); }
+    }
+    .flame-active {
+      animation: flame-pulse 1.8s infinite ease-in-out;
+    }
+    @keyframes progress-shine {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(200%); }
+    }
+    .timer-running-card {
+      border-color: rgba(16, 185, 129, 0.8) !important;
+      box-shadow: 0 0 18px rgba(16, 185, 129, 0.2);
+    }
+  </style>
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col items-center antialiased pb-28">
+
+  <!-- Mobile App Header Sticky -->
+  <header class="w-full max-w-md bg-[#0f172a]/95 backdrop-blur-md sticky top-0 z-40 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+        <svg class="w-5 h-5 text-slate-950 font-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-base font-black tracking-tight text-white leading-tight">FitStreak Pro</h1>
+        <p class="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Temporizador Obligatorio</p>
+      </div>
+    </div>
+
+    <!-- Active Streak Badge -->
+    <div id="streakPill" class="flex items-center gap-2 bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/40 px-3 py-1 rounded-full flame-active">
+      <span class="text-xl">🔥</span>
+      <div class="text-right">
+        <span id="streakCountDisplay" class="text-sm font-black text-orange-400 leading-none">0</span>
+        <span class="text-[9px] block font-bold text-orange-400/80 leading-none uppercase">Días</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="w-full max-w-md p-4 flex flex-col gap-4">
+
+    <!-- Streak Status & 7-Day History Card -->
+    <section class="bg-[#11192d] border border-slate-800 rounded-2xl p-4 shadow-xl">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Historial semanal</span>
+          <p id="todayDateLabel" class="text-xs font-semibold text-slate-200 capitalize">Cargando fecha...</p>
+        </div>
+        <div class="text-right">
+          <span class="text-[11px] text-slate-400">Récord: </span>
+          <span id="bestStreakDisplay" class="text-xs font-extrabold text-amber-400">0 días</span>
+        </div>
+      </div>
+
+      <!-- Weekly days circles -->
+      <div id="weeklyCalendarGrid" class="grid grid-cols-7 gap-1.5">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Status banner for today -->
+      <div id="todayStatusBanner" class="mt-3 py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 text-[11px] flex items-center justify-between">
+        <span class="text-slate-400">Estado de hoy:</span>
+        <span id="todayStatusBadge" class="font-bold text-amber-400 flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Pendiente
+        </span>
+      </div>
+    </section>
+
+    <!-- Workout Progress Section -->
+    <section class="bg-[#11192d] border border-slate-800 rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <h2 class="text-sm font-black text-white">Progreso de la Sesión</h2>
+          <p class="text-[11px] text-slate-400">Debes completar el tiempo íntegro de cada ejercicio</p>
+        </div>
+        <span id="completionFraction" class="text-xs font-black px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+          0 / 6
+        </span>
+      </div>
+
+      <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-700/60 relative">
+        <div id="routineProgressBar" class="h-full bg-gradient-to-r from-teal-400 to-emerald-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </section>
+
+    <!-- Exercises Container -->
+    <div class="flex items-center justify-between px-1">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Rutina del Día</h3>
+      <button id="resetSessionBtn" class="text-[11px] font-semibold text-slate-400 hover:text-red-400 flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Reiniciar ejercicios
+      </button>
+    </div>
+
+    <div id="exercisesList" class="flex flex-col gap-3">
+      <!-- Exercise cards rendered dynamically -->
+    </div>
+
+  </main>
+
+  <!-- Sticky Bottom Bar for Confirmation -->
+  <footer class="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 bg-[#090d16]/95 backdrop-blur-md border-t border-slate-800/80 z-30 flex flex-col gap-1.5">
+    <div id="pendingWarningText" class="text-[11px] text-center font-medium text-amber-400/90 flex items-center justify-center gap-1">
+      <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+      </svg>
+      <span id="warningMessage">Termina los temporizadores para desbloquear la confirmación</span>
+    </div>
+
+    <button id="completeWorkoutBtn" disabled class="w-full py-4 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+      <span id="completeWorkoutBtnText">Completar Rutina Diaria</span>
+    </button>
+  </footer>
+
+  <!-- Notification Toast -->
+  <div id="toastNotification" class="fixed top-4 z-50 max-w-sm w-[90%] bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 transition-all transform -translate-y-28 opacity-0 pointer-events-none">
+    <div id="toastIconBg" class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg flex-shrink-0">
+      ⚠️
+    </div>
+    <div class="text-xs flex-1">
+      <p class="font-bold text-slate-200" id="toastTitle">Aviso</p>
+      <p class="text-slate-400" id="toastBody">Mensaje</p>
+    </div>
+  </div>
+
+  <!-- Custom Confirmation Modal -->
+  <div id="modalOverlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="modalCard" class="bg-[#11192d] border border-slate-800 rounded-3xl max-w-sm w-full p-6 text-center transform scale-95 transition-transform duration-300 shadow-2xl">
+      <div class="w-16 h-16 rounded-3xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 mx-auto flex items-center justify-center text-3xl mb-3 shadow-lg shadow-emerald-500/20">
+        🏆
+      </div>
+      <h3 id="modalTitle" class="text-lg font-black text-white mb-1.5">¡Entrenamiento Superado!</h3>
+      <p id="modalMessage" class="text-xs text-slate-300 mb-6 leading-relaxed">
+        Has completado el 100% de los temporizadores de hoy. ¿Deseas confirmar la finalización y registrar tu racha?
+      </p>
+
+      <div class="flex flex-col gap-2.5">
+        <button id="modalConfirmBtn" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black rounded-2xl active:scale-95 shadow-lg shadow-emerald-500/20 text-sm transition-transform">
+          ¡Sí, guardar mi racha de hoy!
+        </button>
+        <button id="modalCancelBtn" class="w-full py-3 bg-slate-800 text-slate-300 font-bold rounded-2xl active:bg-slate-700 text-xs transition-colors">
+          Revisar ejercicios
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Application Logic -->
+  <script>
+    // List of targeted home exercises with mandatory countdowns in seconds
+    const EXERCISES_CONFIG = [
+      {
+        id: "ex_1",
+        title: "Jumping Jacks (Calentamiento)",
+        tag: "Cardio",
+        requiredSeconds: 45,
+        icon: "⚡",
+        repsInfo: "45 segundos continuos",
+        tip: "Coordina brazos y piernas manteniendo ritmo suave para elevar temperatura."
+      },
+      {
+        id: "ex_2",
+        title: "Sentadillas Profundas",
+        tag: "Piernas",
+        requiredSeconds: 45,
+        icon: "🦵",
+        repsInfo: "45s de ritmo controlado",
+        tip: "Pecho erguido, cadera hacia atrás y rodillas alineadas con la punta de pies."
+      },
+      {
+        id: "ex_3",
+        title: "Flexiones de Brazos (Push-Ups)",
+        tag: "Pecho / Tríceps",
+        requiredSeconds: 45,
+        icon: "💪",
+        repsInfo: "45s (apoya rodillas si lo requieres)",
+        tip: "Mantén el abdomen contraído formando una tabla recta de cabeza a talones."
+      },
+      {
+        id: "ex_4",
+        title: "Plancha Abdominal Isométrica",
+        tag: "Core / Abdomen",
+        requiredSeconds: 60,
+        icon: "🧱",
+        repsInfo: "60 segundos de tensión continua",
+        tip: "Codos bajo los hombros, glúteos apretados y respiración controlada."
+      },
+      {
+        id: "ex_5",
+        title: "Zancadas Alternas (Lunges)",
+        tag: "Piernas / Glúteos",
+        requiredSeconds: 45,
+        icon: "🚶",
+        repsInfo: "45s alternando piernas",
+        tip: "Paso amplio al frente con el torso erguido. La rodilla trasera casi roza el suelo."
+      },
+      {
+        id: "ex_6",
+        title: "Estiramientos y Respiración",
+        tag: "Recuperación",
+        requiredSeconds: 60,
+        icon: "🧘",
+        repsInfo: "60 segundos de vuelta a la calma",
+        tip: "Inhala profundo, relaja la espalda, estira cuádriceps e isquiotibiales."
+      }
+    ];
+
+    const STORAGE_KEY = "fitstreak_mandatory_timer_v2";
+
+    // Web Audio API Synthesizer (No external sound files required)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playTone(freq, type, duration, delay = 0) {
+      setTimeout(() => {
+        try {
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start();
+          osc.stop(audioCtx.currentTime + duration);
+        } catch (e) {
+          // Silent fallback on browser restrictions
+        }
+      }, delay);
+    }
+
+    function soundTimerFinished() {
+      // 3 short celebratory beeps
+      playTone(587.33, 'sine', 0.12, 0);   // D5
+      playTone(739.99, 'sine', 0.12, 140); // F#5
+      playTone(880.00, 'sine', 0.25, 280); // A5
+    }
+
+    function soundWorkoutCompleted() {
+      // Fanfare sequence
+      playTone(523.25, 'triangle', 0.15, 0);   // C5
+      playTone(659.25, 'triangle', 0.15, 120); // E5
+      playTone(783.99, 'triangle', 0.15, 240); // G5
+      playTone(1046.50, 'triangle', 0.45, 360); // C6
+    }
+
+    function soundTick() {
+      playTone(400, 'sine', 0.04, 0);
+    }
+
+    function soundError() {
+      playTone(220, 'sawtooth', 0.15, 0);
+    }
+
+    function getTodayString() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function getYesterdayString() {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const y = yesterday.getFullYear();
+      const m = String(yesterday.getMonth() + 1).padStart(2, '0');
+      const d = String(yesterday.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function loadInitialState() {
+      const defaults = {
+        streak: 0,
+        bestStreak: 0,
+        lastCompletedDate: null,
+        history: {}, // { "YYYY-MM-DD": true }
+        exerciseStates: {} // { "ex_1": { remaining: 45, completed: false, isRunning: false } }
+      };
+
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) return defaults;
+        const parsed = JSON.parse(stored);
+        return { ...defaults, ...parsed };
+      } catch (e) {
+        return defaults;
+      }
+    }
+
+    function saveAppState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        console.error("No se pudo guardar", e);
+      }
+    }
+
+    // Initialize or sanitize timers
+    let appState = loadInitialState();
+    const todayStr = getTodayString();
+    const yesterdayStr = getYesterdayString();
+
+    // Check streak validity relative to current date
+    if (appState.lastCompletedDate) {
+      if (appState.lastCompletedDate !== todayStr && appState.lastCompletedDate !== yesterdayStr) {
+        // More than 1 day skipped: streak resets
+        appState.streak = 0;
+      }
+    } else {
+      appState.streak = 0;
+    }
+
+    // Reset daily exercise states if day changed
+    const currentDayToken = localStorage.getItem("fitstreak_day_token");
+    if (currentDayToken !== todayStr) {
+      appState.exerciseStates = {};
+      localStorage.setItem("fitstreak_day_token", todayStr);
+    }
+
+    // Guarantee each exercise has an initialized state
+    EXERCISES_CONFIG.forEach(ex => {
+      if (!appState.exerciseStates[ex.id]) {
+        appState.exerciseStates[ex.id] = {
+          remaining: ex.requiredSeconds,
+          completed: false
+        };
+      }
+    });
+    saveAppState();
+
+    // Active Interval Handles dictionary
+    const activeIntervals = {};
+
+    function formatSeconds(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    const exercisesListEl = document.getElementById("exercisesList");
+    const completionFractionEl = document.getElementById("completionFraction");
+    const routineProgressBarEl = document.getElementById("routineProgressBar");
+    const completeWorkoutBtn = document.getElementById("completeWorkoutBtn");
+    const completeWorkoutBtnText = document.getElementById("completeWorkoutBtnText");
+    const pendingWarningText = document.getElementById("pendingWarningText");
+    const warningMessage = document.getElementById("warningMessage");
+    const todayStatusBadge = document.getElementById("todayStatusBadge");
+
+    function renderExercises() {
+      exercisesListEl.innerHTML = "";
+      let completedCount = 0;
+
+      EXERCISES_CONFIG.forEach(ex => {
+        const state = appState.exerciseStates[ex.id];
+        const isCompleted = state.completed;
+        const isRunning = !!activeIntervals[ex.id];
+        if (isCompleted) completedCount++;
+
+        const card = document.createElement("div");
+        card.id = `card_${ex.id}`;
+        card.className = `p-4 rounded-2xl border transition-all duration-200 flex flex-col gap-3 relative ${
+          isCompleted 
+            ? "bg-[#0d1f1c] border-emerald-500/50" 
+            : isRunning
+              ? "bg-[#111d33] timer-running-card"
+              : "bg-[#11192d] border-slate-800"
+        }`;
+
+        card.innerHTML = `
+          <!-- Header of card -->
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl">${ex.icon}</span>
+              <div>
+                <h4 class="text-sm font-bold ${isCompleted ? 'text-emerald-300 line-through' : 'text-white'}">
+                  ${ex.title}
+                </h4>
+                <p class="text-[11px] text-slate-400">${ex.repsInfo}</p>
+              </div>
+            </div>
+            <span class="text-[9px] uppercase font-black px-2 py-0.5 rounded-full ${
+              isCompleted 
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                : 'bg-slate-800 text-slate-400 border border-slate-700'
+            }">
+              ${ex.tag}
+            </span>
+          </div>
+
+          <!-- Coach tip -->
+          <p class="text-[11px] text-slate-400/90 leading-tight bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+            💡 ${ex.tip}
+          </p>
+
+          <!-- Individual Countdown & Controls -->
+          <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+            <!-- Time Display -->
+            <div class="flex items-center gap-2">
+              <div class="px-3 py-1.5 rounded-xl ${
+                isCompleted 
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
+                  : isRunning 
+                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/40' 
+                    : 'bg-slate-800 text-slate-200 border border-slate-700'
+              } font-mono font-black text-lg tracking-wider" id="timer_text_${ex.id}">
+                ${formatSeconds(state.remaining)}
+              </div>
+              
+              ${isCompleted ? `
+                <span class="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                  ✓ Tiempo cumplido
+                </span>
+              ` : `
+                <span class="text-[10px] text-slate-400">
+                  ${isRunning ? 'Corriendo...' : `Objetivo: ${ex.requiredSeconds}s`}
+                </span>
+              `}
+            </div>
+
+            <!-- Action Buttons for this exercise -->
+            <div class="flex items-center gap-1.5">
+              ${!isCompleted ? `
+                <button onclick="toggleExerciseTimer('${ex.id}')" class="px-3.5 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1 ${
+                  isRunning 
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20' 
+                    : 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                }">
+                  ${isRunning ? `
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    Pausar
+                  ` : `
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    Iniciar
+                  `}
+                </button>
+                <button onclick="resetExerciseTimer('${ex.id}')" title="Reiniciar tiempo" class="p-2 rounded-xl bg-slate-800 text-slate-400 active:bg-slate-700 border border-slate-700">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                </button>
+              ` : `
+                <button onclick="unlockExercise('${ex.id}')" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-200 text-[11px] font-semibold border border-slate-700">
+                  Repetir
+                </button>
+              `}
+
+              <!-- Manual Checkbox Click Attempt (Locked until timer reaches 0) -->
+              <button onclick="attemptCheckExercise('${ex.id}')" class="w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                isCompleted 
+                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/30' 
+                  : 'bg-slate-800/80 border border-slate-700 text-slate-500'
+              }">
+                ${isCompleted ? `
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ` : `
+                  <svg class="w-4 h-4 opacity-40" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                  </svg>
+                `}
+              </button>
+            </div>
+          </div>
+        `;
+
+        exercisesListEl.appendChild(card);
+      });
+
+      // Update fraction and progress
+      const total = EXERCISES_CONFIG.length;
+      completionFractionEl.innerText = `${completedCount} / ${total}`;
+      const percentage = Math.round((completedCount / total) * 100);
+      routineProgressBarEl.style.width = `${percentage}%`;
+
+      updateGlobalCompletionControls(completedCount, total);
+    }
+
+    function toggleExerciseTimer(id) {
+      if (activeIntervals[id]) {
+        // Pause timer
+        clearInterval(activeIntervals[id]);
+        delete activeIntervals[id];
+        renderExercises();
+      } else {
+        // Start timer
+        startExerciseCountdown(id);
+      }
+    }
+
+    function startExerciseCountdown(id) {
+      // Pause any other running timer to focus on this single exercise
+      Object.keys(activeIntervals).forEach(runningId => {
+        if (runningId !== id) {
+          clearInterval(activeIntervals[runningId]);
+          delete activeIntervals[runningId];
+        }
+      });
+
+      const config = EXERCISES_CONFIG.find(c => c.id === id);
+      const state = appState.exerciseStates[id];
+
+      // If already at 0, reset before restarting
+      if (state.remaining <= 0) {
+        state.remaining = config.requiredSeconds;
+      }
+
+      renderExercises();
+
+      activeIntervals[id] = setInterval(() => {
+        if (state.remaining > 1) {
+          state.remaining--;
+          const timerEl = document.getElementById(`timer_text_${id}`);
+          if (timerEl) {
+            timerEl.innerText = formatSeconds(state.remaining);
+          }
+          if (state.remaining <= 3) {
+            soundTick();
+          }
+        } else {
+          // Timer finished!
+          state.remaining = 0;
+          state.completed = true;
+          clearInterval(activeIntervals[id]);
+          delete activeIntervals[id];
+          saveAppState();
+
+          // Sounds and Haptics
+          soundTimerFinished();
+          if (navigator.vibrate) navigator.vibrate([100, 50, 150]);
+
+          showToast("¡Tiempo completado!", `Has cumplido los ${config.requiredSeconds}s de ${config.title}. Marcado como listo.`, "🎉");
+          renderExercises();
+        }
+      }, 1000);
+    }
+
+    function resetExerciseTimer(id) {
+      const config = EXERCISES_CONFIG.find(c => c.id === id);
+      if (activeIntervals[id]) {
+        clearInterval(activeIntervals[id]);
+        delete activeIntervals[id];
+      }
+      appState.exerciseStates[id].remaining = config.requiredSeconds;
+      appState.exerciseStates[id].completed = false;
+      saveAppState();
+      renderExercises();
+    }
+
+    function unlockExercise(id) {
+      const config = EXERCISES_CONFIG.find(c => c.id === id);
+      appState.exerciseStates[id].completed = false;
+      appState.exerciseStates[id].remaining = config.requiredSeconds;
+      saveAppState();
+      renderExercises();
+    }
+
+    // Intercept manual clicks on exercise checkboxes
+    function attemptCheckExercise(id) {
+      const state = appState.exerciseStates[id];
+      const config = EXERCISES_CONFIG.find(c => c.id === id);
+
+      if (state.completed) {
+        showToast("Ejercicio listo", "Este ejercicio ya cumplió su temporizador reglamentario.", "✅");
+      } else {
+        soundError();
+        if (navigator.vibrate) navigator.vibrate(200);
+        showToast(
+          "Temporizador Incompleto", 
+          `Faltan ${state.remaining} seg en "${config.title}". Presiona 'Iniciar' y espera a que llegue a 00:00 para marcarlo.`,
+          "⏳"
+        );
+      }
+    }
+
+    function updateGlobalCompletionControls(completedCount, total) {
+      const isAlreadyCompletedToday = appState.lastCompletedDate === todayStr;
+
+      if (isAlreadyCompletedToday) {
+        completeWorkoutBtn.disabled = true;
+        completeWorkoutBtn.className = "w-full py-4 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 cursor-default";
+        completeWorkoutBtnText.innerText = "¡Rutina de hoy ya completada! 🔥";
+        pendingWarningText.classList.add("hidden");
+
+        todayStatusBadge.className = "font-bold text-emerald-400 flex items-center gap-1";
+        todayStatusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Completado hoy`;
+        return;
+      }
+
+      const allFinished = completedCount === total;
+
+      if (allFinished) {
+        completeWorkoutBtn.disabled = false;
+        completeWorkoutBtn.className = "w-full py-4 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 shadow-xl shadow-emerald-500/30 cursor-pointer";
+        completeWorkoutBtnText.innerText = "Confirmar y Guardar Racha de Hoy";
+        pendingWarningText.classList.add("hidden");
+
+        todayStatusBadge.className = "font-bold text-teal-400 flex items-center gap-1";
+        todayStatusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span> Listo para registrar`;
+      } else {
+        completeWorkoutBtn.disabled = true;
+        completeWorkoutBtn.className = "w-full py-4 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700";
+        completeWorkoutBtnText.innerText = "Completar Rutina Diaria (Bloqueado)";
+        pendingWarningText.classList.remove("hidden");
+        const remainingExercises = total - completedCount;
+        warningMessage.innerText = `Faltan ${remainingExercises} ejercicio(s) por finalizar su temporizador`;
+
+        todayStatusBadge.className = "font-bold text-amber-400 flex items-center gap-1";
+        todayStatusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Pendiente (${completedCount}/${total})`;
+      }
+    }
+
+    // Modal Interaction
+    const modalOverlay = document.getElementById("modalOverlay");
+    const modalCard = document.getElementById("modalCard");
+    const modalConfirmBtn = document.getElementById("modalConfirmBtn");
+    const modalCancelBtn = document.getElementById("modalCancelBtn");
+
+    function openModal() {
+      modalOverlay.classList.remove("opacity-0", "pointer-events-none");
+      modalCard.classList.remove("scale-95");
+      modalCard.classList.add("scale-100");
+    }
+
+    function closeModal() {
+      modalOverlay.classList.add("opacity-0", "pointer-events-none");
+      modalCard.classList.remove("scale-100");
+      modalCard.classList.add("scale-95");
+    }
+
+    modalCancelBtn.onclick = closeModal;
+
+    completeWorkoutBtn.onclick = () => {
+      // Safety check: is total satisfied?
+      const total = EXERCISES_CONFIG.length;
+      const done = EXERCISES_CONFIG.filter(e => appState.exerciseStates[e.id].completed).length;
+
+      if (done < total) {
+        soundError();
+        showToast("Temporizadores pendientes", `Aún tienes ${total - done} ejercicio(s) sin completar.`, "⛔");
+        return;
+      }
+
+      openModal();
+    };
+
+    modalConfirmBtn.onclick = () => {
+      closeModal();
+      registerDailyWorkoutSuccess();
+    };
+
+    function registerDailyWorkoutSuccess() {
+      if (appState.lastCompletedDate === todayStr) {
+        showToast("Aviso", "Ya habías registrado la rutina de hoy.", "🔥");
+        return;
+      }
+
+      if (appState.lastCompletedDate === yesterdayStr) {
+        // Consecutive day
+        appState.streak += 1;
+      } else {
+        // Restarted or first time
+        appState.streak = 1;
+      }
+
+      if (appState.streak > appState.bestStreak) {
+        appState.bestStreak = appState.streak;
+      }
+
+      appState.lastCompletedDate = todayStr;
+      appState.history[todayStr] = true;
+
+      saveAppState();
+      renderWeeklyCalendar();
+      renderExercises();
+
+      // Audio & Confetti
+      soundWorkoutCompleted();
+      triggerConfetti();
+
+      showToast("¡Racha Sumada!", `¡Felicidades! Tu racha actual es de ${appState.streak} día(s) seguidos.`, "🔥");
+    }
+
+    function renderWeeklyCalendar() {
+      const grid = document.getElementById("weeklyCalendarGrid");
+      grid.innerHTML = "";
+
+      const daysOfWeekLetters = ["D", "L", "M", "M", "J", "V", "S"];
+      const now = new Date();
+
+      // Show past 7 days up to today
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const key = `${y}-${m}-${day}`;
+
+        const isToday = i === 0;
+        const isDone = !!appState.history[key];
+        const dayLetter = daysOfWeekLetters[d.getDay()];
+
+        const box = document.createElement("div");
+        box.className = `flex flex-col items-center py-2 px-1 rounded-xl border transition-all ${
+          isToday 
+            ? "border-emerald-500/60 bg-emerald-500/10" 
+            : "border-slate-800 bg-slate-900/80"
+        }`;
+
+        box.innerHTML = `
+          <span class="text-[9px] font-bold text-slate-400 mb-1">${dayLetter}</span>
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+            isDone 
+              ? "bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/50" 
+              : isToday 
+                ? "bg-slate-800 text-slate-200 border border-slate-700" 
+                : "bg-slate-800/40 text-slate-500"
+          }">
+            ${isDone ? "✓" : d.getDate()}
+          </div>
+        `;
+        grid.appendChild(box);
+      }
+
+      const options = { weekday: 'long', day: 'numeric', month: 'short' };
+      document.getElementById("todayDateLabel").innerText = now.toLocaleDateString('es-ES', options);
+      document.getElementById("streakCountDisplay").innerText = appState.streak;
+      document.getElementById("bestStreakDisplay").innerText = `${appState.bestStreak} días`;
+    }
+
+    // Reset daily routine action
+    document.getElementById("resetSessionBtn").onclick = () => {
+      // Clear active timers
+      Object.keys(activeIntervals).forEach(id => {
+        clearInterval(activeIntervals[id]);
+        delete activeIntervals[id];
+      });
+
+      EXERCISES_CONFIG.forEach(ex => {
+        appState.exerciseStates[ex.id] = {
+          remaining: ex.requiredSeconds,
+          completed: false
+        };
+      });
+
+      saveAppState();
+      renderExercises();
+      showToast("Rutina reiniciada", "Todos los temporizadores volvieron a su tiempo inicial.", "🔄");
+    };
+
+    // Confetti launcher
+    function triggerConfetti() {
+      try {
+        if (typeof confetti === "function") {
+          confetti({
+            particleCount: 90,
+            spread: 70,
+            origin: { y: 0.8 },
+            colors: ['#10b981', '#34d399', '#f97316', '#f59e0b', '#38bdf8']
+          });
+        }
+      } catch (err) {}
+    }
+
+    // Toast manager
+    let toastTimeout = null;
+    function showToast(title, msg, icon = "ℹ️") {
+      const toast = document.getElementById("toastNotification");
+      const toastTitle = document.getElementById("toastTitle");
+      const toastBody = document.getElementById("toastBody");
+      const toastIconBg = document.getElementById("toastIconBg");
+
+      toastTitle.innerText = title;
+      toastBody.innerText = msg;
+      toastIconBg.innerText = icon;
+
+      toast.classList.remove("-translate-y-28", "opacity-0", "pointer-events-none");
+      toast.classList.add("translate-y-0", "opacity-100");
+
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove("translate-y-0", "opacity-100");
+        toast.classList.add("-translate-y-28", "opacity-0", "pointer-events-none");
+      }, 3500);
+    }
+
+    // Initial Execution
+    renderWeeklyCalendar();
+    renderExercises();
+  </script>
+</body>
+</html>
